@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: job-tracker-api
+  datasource:
+    # Settings come from environment variables so secrets never live in Git.
+    # DB_PASSWORD has no default on purpose: the app refuses to start without it.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/jobtracker}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema; Hibernate only checks that entities match it.
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

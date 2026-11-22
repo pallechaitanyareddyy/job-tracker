@@ -1,0 +1,4 @@
+spring:
+  datasource:
+    # Tests use their own database so they never touch your real data.
+    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/jobtracker_test}
