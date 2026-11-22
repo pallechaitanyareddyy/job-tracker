@@ -8,6 +8,6 @@ public class JobTrackerApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(JobTrackerApplication.class, args);
-        System.out.println("Job Tracker API is running...");
+        System.out.println("Job Tracker API is running live on GitHub...");
     }
 }
