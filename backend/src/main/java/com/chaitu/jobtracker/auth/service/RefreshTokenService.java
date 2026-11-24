@@ -9,13 +9,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.chaitu.jobtracker.auth.entity.RefreshToken;
+import com.chaitu.jobtracker.auth.exception.InvalidRefreshTokenException;
 import com.chaitu.jobtracker.auth.repository.RefreshTokenRepository;
 import com.chaitu.jobtracker.auth.security.SecurityProperties;
 import com.chaitu.jobtracker.auth.security.TokenHasher;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
-/** Creates refresh tokens. Rotation and logout are added in slice 2b. */
+/** Creates, rotates and revokes refresh tokens. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RefreshTokenService {
@@ -24,6 +27,10 @@ public class RefreshTokenService {
 
     private final RefreshTokenRepository repository;
     private final SecurityProperties properties;
+
+    /** The user a refresh token belonged to, plus the brand-new token that replaces it. */
+    public record Rotation(UUID userId, String newRawToken) {
+    }
 
     /**
      * Creates a new refresh token for the user and stores its hash.
@@ -39,5 +46,39 @@ public class RefreshTokenService {
         repository.save(new RefreshToken(userId, TokenHasher.sha256Hex(rawToken), expiresAt));
 
         return rawToken;
+    }
+
+    /**
+     * Swaps a refresh token for a new one. Each token works exactly once.
+     *
+     * If an already-used token shows up again, either the thief or the real owner is replaying it,
+     * and we cannot tell which. So every session of that user is ended and they must log in again.
+     *
+     * noRollbackFor matters: normally a thrown exception undoes the whole transaction, which would also
+     * undo "revoke all sessions". With it, the revocation is saved even though we still throw the 401.
+     */
+    @Transactional(noRollbackFor = InvalidRefreshTokenException.class)
+    public Rotation rotate(String rawToken) {
+        String hash = TokenHasher.sha256Hex(rawToken);
+        Instant now = Instant.now();
+
+        RefreshToken token = repository.findByTokenHash(hash).orElseThrow(InvalidRefreshTokenException::new);
+
+        if (repository.revokeIfActive(hash, now) == 1) {
+            return new Rotation(token.getUserId(), issue(token.getUserId()));
+        }
+
+        if (token.getRevokedAt() != null) {
+            int ended = repository.revokeAllActiveForUser(token.getUserId(), now);
+            log.warn("Refresh token reuse detected for user {}: ended {} active session(s)", token.getUserId(), ended);
+        }
+        // Expired tokens end up here too, without the revoke-all.
+        throw new InvalidRefreshTokenException();
+    }
+
+    /** Logout. Safe to call twice, or with an unknown token: it just does nothing then. */
+    @Transactional
+    public void revoke(String rawToken) {
+        repository.revokeIfActive(TokenHasher.sha256Hex(rawToken), Instant.now());
     }
 }

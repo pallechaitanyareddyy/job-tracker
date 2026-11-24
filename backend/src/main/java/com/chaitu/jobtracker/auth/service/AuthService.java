@@ -13,6 +13,7 @@ import com.chaitu.jobtracker.auth.dto.LoginRequest;
 import com.chaitu.jobtracker.auth.dto.RegisterRequest;
 import com.chaitu.jobtracker.auth.exception.EmailAlreadyUsedException;
 import com.chaitu.jobtracker.auth.exception.InvalidCredentialsException;
+import com.chaitu.jobtracker.auth.exception.InvalidRefreshTokenException;
 import com.chaitu.jobtracker.user.dto.UserResponse;
 import com.chaitu.jobtracker.user.entity.User;
 import com.chaitu.jobtracker.user.repository.UserRepository;
@@ -84,6 +85,35 @@ public class AuthService {
                 jwtService.accessTokenTtl().toSeconds(),
                 refreshToken,
                 UserResponse.from(user));
+    }
+
+    /**
+     * Trades a refresh token for a new access token and a new refresh token.
+     * Deliberately NOT @Transactional: RefreshTokenService.rotate has its own transaction, and an outer one
+     * would be marked rollback-only by the 401 and undo the "revoke all sessions" safety measure.
+     */
+    public LoginResult refresh(String rawRefreshToken) {
+        if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
+            throw new InvalidRefreshTokenException();
+        }
+
+        RefreshTokenService.Rotation rotation = refreshTokenService.rotate(rawRefreshToken);
+        User user = userRepository.findById(rotation.userId()).orElseThrow(InvalidRefreshTokenException::new);
+
+        String accessToken = jwtService.createAccessToken(user.getId(), DEFAULT_ROLES);
+        log.info("User {} refreshed their session", user.getId());
+        return new LoginResult(
+                accessToken,
+                jwtService.accessTokenTtl().toSeconds(),
+                rotation.newRawToken(),
+                UserResponse.from(user));
+    }
+
+    /** Ends this one session. A missing cookie is fine: the user is effectively logged out already. */
+    public void logout(String rawRefreshToken) {
+        if (rawRefreshToken != null && !rawRefreshToken.isBlank()) {
+            refreshTokenService.revoke(rawRefreshToken);
+        }
     }
 
     private static String normalizeEmail(String email) {

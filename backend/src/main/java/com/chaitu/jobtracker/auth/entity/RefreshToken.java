@@ -42,7 +42,7 @@ public class RefreshToken {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
-    /** Empty while the token is usable. Set when it is rotated or the user logs out (slice 2b). */
+    /** Empty while the token is usable. Set when it is rotated or the user logs out. */
     @Column(name = "revoked_at")
     private Instant revokedAt;
 
