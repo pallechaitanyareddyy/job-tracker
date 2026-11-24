@@ -2,3 +2,10 @@ spring:
   datasource:
     # Tests use their own database so they never touch your real data.
     url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/jobtracker_test}
+
+
+app:
+  security:
+    # A throwaway key that exists only for tests. It protects nothing real.
+    jwt-secret: test-only-secret-key-that-is-at-least-32-characters-long
+

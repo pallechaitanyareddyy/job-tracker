@@ -26,3 +26,13 @@ management:
   endpoint:
     health:
       show-details: never
+
+app:
+  security:
+    # At least 32 characters. Comes from the JWT_SECRET environment variable, never from Git.
+    jwt-secret: ${JWT_SECRET}
+    jwt-issuer: job-tracker-api
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d
+    # false is right for http://localhost. Set COOKIE_SECURE=true once the app runs on https.
+    refresh-cookie-secure: ${COOKIE_SECURE:false}
